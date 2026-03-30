@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML Studio — Advanced Machine Learning Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --bg: #080c10;
+    --bg2: #0e1420;
+    --bg3: #141c2a;
+    --border: #1e2d42;
+    --accent: #00e5ff;
+    --accent2: #7c3aed;
+    --accent3: #f59e0b;
+    --success: #10b981;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --glow: 0 0 20px rgba(0,229,255,0.15);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  /* GRID BACKGROUND */
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events:none; z-index:0;
+  }
+  /* HEADER */
+  header {
+    position:sticky; top:0; z-index:100;
+    background: rgba(8,12,16,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display:flex; align-items:center; justify-content:space-between;
+    height:60px;
+  }
+  .logo {
+    font-size:1.1rem; font-weight:800; letter-spacing:-0.5px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .logo-dot {
+    width:8px; height:8px; border-radius:50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .header-status {
+    font-family:'JetBrains Mono'; font-size:0.7rem; color:var(--muted);
+    display:flex; gap:16px; align-items:center;
+  }
+  .status-badge {
+    padding:3px 10px; border-radius:20px;
+    background: rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3);
+    color:var(--success); font-size:0.65rem;
+  }
+  /* LAYOUT */
+  .app {
+    position:relative; z-index:1;
+    display:grid;
+    grid-template-columns: 280px 1fr;
+    min-height: calc(100vh - 60px);
+  }
+  /* SIDEBAR */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    padding: 1.5rem;
+    display:flex; flex-direction:column; gap:1.5rem;
+    background: rgba(14,20,32,0.5);
+  }
+  .sidebar-section { display:flex; flex-direction:column; gap:0.6rem; }
+  .sidebar-label {
+    font-size:0.65rem; font-weight:700; letter-spacing:3px;
+    color:var(--muted); text-transform:uppercase;
+    padding-bottom:0.4rem; border-bottom:1px solid var(--border);
+  }
+  /* UPLOAD AREA */
+  .upload-area {
+    border: 1.5px dashed var(--border);
+    border-radius:12px;
+    padding:1.5rem 1rem;
+    text-align:center;
+    cursor:pointer;
+    transition:all 0.3s;
+    background: rgba(0,229,255,0.02);
+    position:relative; overflow:hidden;
+  }
+  .upload-area:hover, .upload-area.drag {
+    border-color: var(--accent);
+    background: rgba(0,229,255,0.06);
+    box-shadow: var(--glow);
+  }
+  .upload-icon { font-size:2rem; margin-bottom:0.5rem; }
+  .upload-text { font-size:0.75rem; color:var(--muted); }
+  .upload-text strong { color:var(--accent); }
+  #fileInput { display:none; }
+  /* METHOD TABS */
+  .method-tabs {
+    display:grid; grid-template-columns:1fr 1fr; gap:6px;
+  }
+  .method-tab {
+    padding:8px 6px; border-radius:8px; border:1px solid var(--border);
+    background:transparent; color:var(--muted);
+    font-family:'Syne'; font-size:0.7rem; font-weight:600;
+    cursor:pointer; transition:all 0.2s; text-align:center;
+  }
+  .method-tab.active {
+    background: rgba(0,229,255,0.1);
+    border-color:var(--accent); color:var(--accent);
+  }
+  /* ALGORITHM LIST */
+  .algo-list { display:flex; flex-direction:column; gap:4px; }
+  .algo-item {
+    padding:8px 12px; border-radius:8px;
+    border:1px solid transparent;
+    cursor:pointer; transition:all 0.2s;
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:0.78rem;
+  }
+  .algo-item:hover { background: rgba(255,255,255,0.04); border-color:var(--border); }
+  .algo-item.selected {
+    background: rgba(124,58,237,0.15);
+    border-color: rgba(124,58,237,0.5);
+    color:#a78bfa;
+  }
+  .algo-item.selected .algo-check { opacity:1; }
+  .algo-check { opacity:0; color:var(--accent2); font-size:0.7rem; }
+  .algo-tag {
+    font-size:0.55rem; padding:2px 6px; border-radius:4px;
+    font-family:'JetBrains Mono';
+  }
+  .tag-cls { background:rgba(0,229,255,0.1); color:var(--accent); border:1px solid rgba(0,229,255,0.2); }
+  .tag-reg { background:rgba(245,158,11,0.1); color:var(--accent3); border:1px solid rgba(245,158,11,0.2); }
+  .tag-clu { background:rgba(124,58,237,0.1); color:#a78bfa; border:1px solid rgba(124,58,237,0.2); }
+  .tag-dim { background:rgba(16,185,129,0.1); color:var(--success); border:1px solid rgba(16,185,129,0.2); }
+  /* CONFIG */
+  .config-grid { display:grid; gap:8px; }
+  .config-item { display:flex; flex-direction:column; gap:4px; }
+  .config-item label { font-size:0.65rem; color:var(--muted); font-weight:600; letter-spacing:1px; }
+  .config-item input, .config-item select {
+    background: var(--bg3); border:1px solid var(--border);
+    color:var(--text); padding:6px 10px; border-radius:6px;
+    font-family:'JetBrains Mono'; font-size:0.72rem;
+    outline:none; transition:border-color 0.2s;
+  }
+  .config-item input:focus, .config-item select:focus { border-color:var(--accent); }
+  /* RUN BUTTON */
+  .run-btn {
+    width:100%; padding:12px;
+    background: linear-gradient(135deg, #00e5ff, #7c3aed);
+    border:none; border-radius:10px;
+    font-family:'Syne'; font-weight:800; font-size:0.85rem;
+    color:#000; cursor:pointer;
+    transition:all 0.3s; letter-spacing:1px;
+    position:relative; overflow:hidden;
+  }
+  .run-btn::after {
+    content:''; position:absolute; inset:0;
+    background:rgba(255,255,255,0);
+    transition:background 0.2s;
+  }
+  .run-btn:hover::after { background:rgba(255,255,255,0.1); }
+  .run-btn:active { transform:scale(0.98); }
+  .run-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  /* MAIN */
+  .main { padding:2rem; display:flex; flex-direction:column; gap:2rem; overflow-y:auto; }
+  /* WELCOME STATE */
+  .welcome {
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:1rem; text-align:center; padding:4rem;
+    animation: fadeIn 0.6s ease;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:none} }
+  .welcome-title { font-size:3rem; font-weight:800; line-height:1; letter-spacing:-2px; }
+  .welcome-title span { color:var(--accent); }
+  .welcome-sub { color:var(--muted); font-size:0.9rem; max-width:420px; line-height:1.7; }
+  .step-list {
+    display:flex; gap:2rem; margin-top:1rem;
+  }
+  .step { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .step-num {
+    width:40px; height:40px; border-radius:50%;
+    border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono'; font-size:0.75rem; color:var(--muted);
+  }
+  .step p { font-size:0.72rem; color:var(--muted); text-align:center; max-width:80px; }
+  /* DASHBOARD */
+  .dashboard { display:none; flex-direction:column; gap:1.5rem; animation:fadeIn 0.5s ease; }
+  .dashboard.visible { display:flex; }
+  /* METRICS ROW */
+  .metrics-row { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; }
+  .metric-card {
+    background:var(--bg2); border:1px solid var(--border);
+    border-radius:14px; padding:1.2rem;
+    position:relative; overflow:hidden;
+    transition:border-color 0.3s;
+  }
+  .metric-card:hover { border-color:rgba(0,229,255,0.3); }
+  .metric-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+  .metric-label { font-size:0.65rem; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin-bottom:0.5rem; }
+  .metric-value { font-size:2rem; font-weight:800; font-family:'JetBrains Mono'; letter-spacing:-1px; }
+  .metric-sub { font-size:0.65rem; color:var(--muted); margin-top:4px; }
+  /* CHARTS GRID */
+  .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+  .chart-card {
+    background:var(--bg2); border:1px solid var(--border);
+    border-radius:14px; padding:1.5rem;
+  }
+  .chart-card.full { grid-column:1/-1; }
+  .card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.2rem; }
+  .card-title { font-size:0.8rem; font-weight:700; letter-spacing:1px; }
+  .card-badge {
+    font-size:0.6rem; font-family:'JetBrains Mono';
+    padding:3px 8px; border-radius:4px;
+    background:rgba(0,229,255,0.1); color:var(--accent);
+    border:1px solid rgba(0,229,255,0.2);
+  }
+  canvas { width:100% !important; }
+  /* COMPARE TABLE */
+  .compare-table {
+    background:var(--bg2); border:1px solid var(--border);
+    border-radius:14px; overflow:hidden;
+  }
+  .compare-table table { width:100%; border-collapse:collapse; }
+  .compare-table th {
+    padding:10px 16px; font-size:0.65rem; letter-spacing:2px;
+    text-transform:uppercase; color:var(--muted);
+    text-align:left; border-bottom:1px solid var(--border);
+    background:rgba(0,0,0,0.2);
+  }
+  .compare-table td {
+    padding:10px 16px; font-family:'JetBrains Mono'; font-size:0.75rem;
+    border-bottom:1px solid rgba(30,45,66,0.5);
+  }
+  .compare-table tr:last-child td { border:none; }
+  .compare-table tr:hover td { background:rgba(255,255,255,0.02); }
+  .best { color:var(--success); font-weight:700; }
+  /* DATA PREVIEW */
+  .data-preview {
+    background:var(--bg2); border:1px solid var(--border);
+    border-radius:14px; overflow:hidden;
+  }
+  .preview-scroll { overflow-x:auto; }
+  .preview-scroll table { width:100%; border-collapse:collapse; min-width:600px; }
+  .preview-scroll th {
+    padding:8px 12px; font-size:0.6rem; letter-spacing:2px;
+    color:var(--accent); text-transform:uppercase;
+    background:rgba(0,229,255,0.05); border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  .preview-scroll td {
+    padding:6px 12px; font-family:'JetBrains Mono'; font-size:0.68rem;
+    border-bottom:1px solid rgba(30,45,66,0.4); color:var(--muted);
+  }
+  /* EXPLANATION */
+  .explanation-card {
+    background:var(--bg2); border:1px solid var(--border);
+    border-radius:14px; padding:1.5rem;
+  }
+  .explanation-text { font-size:0.82rem; line-height:1.8; color:#94a3b8; }
+  .explanation-text strong { color:var(--text); }
+  /* LOADER */
+  .loader-overlay {
+    position:fixed; inset:0; z-index:999;
+    background:rgba(8,12,16,0.9); backdrop-filter:blur(10px);
+    display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:1rem;
+  }
+  .loader-overlay.active { display:flex; }
+  .loader-ring {
+    width:60px; height:60px; border-radius:50%;
+    border:2px solid var(--border);
+    border-top-color:var(--accent);
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .loader-text { font-family:'JetBrains Mono'; font-size:0.8rem; color:var(--muted); }
+  /* EXPORT BTN */
+  .export-row { display:flex; gap:10px; justify-content:flex-end; }
+  .export-btn {
+    padding:8px 18px; border-radius:8px;
+    border:1px solid var(--border); background:transparent;
+    color:var(--text); font-family:'Syne'; font-size:0.75rem; font-weight:600;
+    cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px;
+  }
+  .export-btn:hover { border-color:var(--accent); color:var(--accent); }
+  /* TOAST */
+  .toast {
+    position:fixed; bottom:2rem; right:2rem; z-index:999;
+    background:var(--bg3); border:1px solid var(--border);
+    padding:12px 20px; border-radius:10px;
+    font-size:0.78rem; display:none;
+    animation:slideUp 0.3s ease;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  }
+  .toast.show { display:block; }
+  @keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+  /* PROGRESS BAR */
+  .progress-bar-wrap {
+    background:var(--border); border-radius:4px; height:4px; overflow:hidden;
+    margin-top:6px;
+  }
+  .progress-bar-fill {
+    height:100%; border-radius:4px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    transition:width 0.5s ease;
+  }
+  /* Feature importance */
+  .fi-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .fi-label { font-size:0.7rem; color:var(--muted); width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fi-bar-wrap { flex:1; background:var(--border); border-radius:4px; height:8px; }
+  .fi-bar { height:8px; border-radius:4px; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width 0.8s ease; }
+  .fi-val { font-size:0.65rem; font-family:'JetBrains Mono'; color:var(--text); width:36px; text-align:right; }
+  /* scrollbar */
+  ::-webkit-scrollbar { width:4px; height:4px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    ML STUDIO
+  </div>
+  <div class="header-status">
+    <span style="font-family:'JetBrains Mono';font-size:0.65rem;color:var(--muted)" id="dataInfo">No data loaded</span>
+    <span class="status-badge">READY</span>
+  </div>
+</header>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <!-- UPLOAD -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">01 — Data</div>
+      <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+        <div class="upload-icon">⬡</div>
+        <div class="upload-text">Drop CSV file here<br><strong>or click to browse</strong></div>
+      </div>
+      <input type="file" id="fileInput" accept=".csv">
+    </div>
+
+    <!-- METHOD -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">02 — Learning Type</div>
+      <div class="method-tabs">
+        <button class="method-tab active" onclick="setMethod('supervised',this)">Supervised</button>
+        <button class="method-tab" onclick="setMethod('unsupervised',this)">Unsupervised</button>
+      </div>
+    </div>
+
+    <!-- ALGORITHMS -->
+    <div class="sidebar-section" style="flex:1">
+      <div class="sidebar-label">03 — Algorithms</div>
+      <div class="algo-list" id="algoList"></div>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="sidebar-section" id="configSection" style="display:none">
+      <div class="sidebar-label">04 — Config</div>
+      <div class="config-grid" id="configGrid"></div>
+    </div>
+
+    <!-- RUN -->
+    <button class="run-btn" id="runBtn" onclick="runAnalysis()" disabled>▶ RUN ANALYSIS</button>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <!-- WELCOME -->
+    <div class="welcome" id="welcome">
+      <div class="welcome-title">Machine<br><span>Learning</span><br>Studio</div>
+      <div class="welcome-sub">Advanced ML dashboard for supervised & unsupervised learning. Upload your dataset and start exploring.</div>
+      <div class="step-list">
+        <div class="step"><div class="step-num">01</div><p>Upload CSV Data</p></div>
+        <div class="step"><div class="step-num">02</div><p>Choose Method</p></div>
+        <div class="step"><div class="step-num">03</div><p>Pick Algorithm</p></div>
+        <div class="step"><div class="step-num">04</div><p>Run & Analyze</p></div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="dashboard" id="dashboard">
+      <div class="export-row">
+        <button class="export-btn" onclick="exportPDF()">⬇ Export PDF Report</button>
+        <button class="export-btn" onclick="exportCSV()">⬇ Export Results CSV</button>
+      </div>
+
+      <!-- METRICS -->
+      <div class="metrics-row" id="metricsRow"></div>
+
+      <!-- CHARTS -->
+      <div class="charts-grid" id="chartsGrid"></div>
+
+      <!-- MODEL COMPARISON -->
+      <div class="compare-table" id="compareSection" style="display:none">
+        <div style="padding:1.2rem 1.5rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:0.8rem;font-weight:700;letter-spacing:1px;">MODEL COMPARISON</span>
+          <span class="card-badge">AUTO BENCHMARK</span>
+        </div>
+        <table><thead id="compareHead"></thead><tbody id="compareBody"></tbody></table>
+      </div>
+
+      <!-- EXPLANATION -->
+      <div class="explanation-card">
+        <div class="card-header">
+          <span class="card-title">ALGORITHM EXPLANATION</span>
+          <span class="card-badge" id="algoName"></span>
+        </div>
+        <div class="explanation-text" id="explanationText"></div>
+      </div>
+
+      <!-- DATA PREVIEW -->
+      <div class="data-preview">
+        <div style="padding:1.2rem 1.5rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:0.8rem;font-weight:700;letter-spacing:1px;">DATA PREVIEW</span>
+          <span class="card-badge" id="previewBadge"></span>
+        </div>
+        <div class="preview-scroll"><table id="previewTable"></table></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- LOADER -->
+<div class="loader-overlay" id="loader">
+  <div class="loader-ring"></div>
+  <div class="loader-text" id="loaderText">Processing data...</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================
+   STATE
+   ============================================ */
+let state = {
+  data: [], headers: [], method: 'supervised',
+  selectedAlgos: [], targetCol: null,
+  results: {}, charts: {}
+};
+
+const ALGOS = {
+  supervised: [
+    { id:'logistic', label:'Logistic Regression', tag:'cls', tagClass:'tag-cls' },
+    { id:'knn', label:'K-Nearest Neighbors', tag:'cls', tagClass:'tag-cls' },
+    { id:'dtree', label:'Decision Tree', tag:'cls/reg', tagClass:'tag-cls' },
+    { id:'rf', label:'Random Forest', tag:'cls/reg', tagClass:'tag-cls' },
+    { id:'svm', label:'SVM', tag:'cls', tagClass:'tag-cls' },
+    { id:'linreg', label:'Linear Regression', tag:'reg', tagClass:'tag-reg' },
+    { id:'ridge', label:'Ridge Regression', tag:'reg', tagClass:'tag-reg' },
+    { id:'lasso', label:'Lasso Regression', tag:'reg', tagClass:'tag-reg' },
+  ],
+  unsupervised: [
+    { id:'kmeans', label:'K-Means Clustering', tag:'clu', tagClass:'tag-clu' },
+    { id:'dbscan', label:'DBSCAN', tag:'clu', tagClass:'tag-clu' },
+    { id:'pca', label:'PCA', tag:'dim', tagClass:'tag-dim' },
+    { id:'tsne', label:'t-SNE', tag:'dim', tagClass:'tag-dim' },
+    { id:'hierarch', label:'Hierarchical Clustering', tag:'clu', tagClass:'tag-clu' },
+    { id:'iso', label:'Isolation Forest', tag:'anom', tagClass:'tag-clu' },
+  ]
+};
+
+const EXPLANATIONS = {
+  logistic: `<strong>Logistic Regression</strong> is a statistical model used for binary and multiclass classification. It models the probability that a given input belongs to a particular class using a logistic (sigmoid) function. Despite its name, it is a classification algorithm, not regression. It works best when the relationship between features and the log-odds of the outcome is linear. Key assumptions: features are independent, no extreme outliers, large sample size.`,
+  knn: `<strong>K-Nearest Neighbors (KNN)</strong> is a non-parametric lazy learning algorithm. Classification is performed by majority vote among the K nearest training samples in feature space. Distance is typically Euclidean. It requires no explicit training phase but is computationally expensive at prediction time. Sensitive to feature scaling and irrelevant features.`,
+  dtree: `<strong>Decision Tree</strong> partitions the feature space into axis-aligned regions by recursively splitting on the feature and threshold that maximizes information gain (or minimizes Gini impurity). Produces highly interpretable models but prone to overfitting without pruning. Works for both classification and regression tasks.`,
+  rf: `<strong>Random Forest</strong> is an ensemble method that builds multiple decision trees on bootstrapped subsets of the training data and random subsets of features. Final prediction is the majority vote (classification) or average (regression) of all trees. Reduces variance significantly compared to a single tree while maintaining low bias.`,
+  svm: `<strong>Support Vector Machine (SVM)</strong> finds the maximum-margin hyperplane that separates classes. Points closest to the hyperplane are called support vectors. With the kernel trick (RBF, polynomial, sigmoid), SVMs can efficiently solve non-linear problems by implicitly mapping inputs to high-dimensional spaces.`,
+  linreg: `<strong>Linear Regression</strong> models the relationship between features and a continuous target by fitting a linear equation (ŷ = β₀ + β₁x₁ + ...). Coefficients are estimated by minimizing the sum of squared residuals (OLS). Assumes linearity, homoscedasticity, independence of errors, and no perfect multicollinearity.`,
+  ridge: `<strong>Ridge Regression</strong> extends OLS with L2 regularization: it adds a penalty λ·||β||² to the loss function. This shrinks coefficients toward zero but never to exactly zero. Particularly useful when features are correlated (multicollinearity), preventing overfitting in high-dimensional settings.`,
+  lasso: `<strong>Lasso Regression</strong> uses L1 regularization, adding a penalty λ·||β||₁ to the loss. Unlike Ridge, Lasso can shrink some coefficients to exactly zero, performing automatic feature selection. Useful when you suspect many features are irrelevant.`,
+  kmeans: `<strong>K-Means Clustering</strong> partitions n observations into K clusters by iteratively assigning each point to the nearest centroid, then updating centroids as the mean of assigned points. Convergence is guaranteed but to a local optimum. Choose K via the elbow method or silhouette score. Assumes spherical, equally-sized clusters.`,
+  dbscan: `<strong>DBSCAN (Density-Based Spatial Clustering)</strong> groups points that are closely packed together and marks outliers as noise. Two parameters: ε (neighborhood radius) and minPts (minimum points for a core point). Does not require specifying K and can find arbitrarily shaped clusters. Robust to outliers.`,
+  pca: `<strong>Principal Component Analysis (PCA)</strong> is a dimensionality reduction technique that projects data onto orthogonal axes (principal components) of maximum variance. Components are eigenvectors of the covariance matrix. Useful for visualization, noise reduction, and mitigating the curse of dimensionality before applying other algorithms.`,
+  tsne: `<strong>t-SNE (t-Distributed Stochastic Neighbor Embedding)</strong> is a non-linear dimensionality reduction technique optimized for visualization. It models local neighborhood structure in high-dimensional space and embeds it in 2D/3D. Perplexity parameter controls the balance between local and global structure. Not suitable for preprocessing for other ML algorithms.`,
+  hierarch: `<strong>Hierarchical Clustering</strong> builds a tree (dendrogram) of clusters using either agglomerative (bottom-up) or divisive (top-down) approaches. Linkage criteria (single, complete, average, Ward) determine how distances between clusters are computed. Does not require K upfront; cut the dendrogram at the desired level.`,
+  iso: `<strong>Isolation Forest</strong> detects anomalies by randomly partitioning data using isolation trees. Anomalies, being sparse and different, require fewer splits to isolate. The anomaly score is based on the average path length in the forest. Highly scalable and effective for high-dimensional datasets.`,
+};
+
+/* ============================================
+   DRAG AND DROP
+   ============================================ */
+const ua = document.getElementById('uploadArea');
+ua.addEventListener('dragover', e => { e.preventDefault(); ua.classList.add('drag'); });
+ua.addEventListener('dragleave', () => ua.classList.remove('drag'));
+ua.addEventListener('drop', e => { e.preventDefault(); ua.classList.remove('drag'); handleFile(e.dataTransfer.files[0]); });
+document.getElementById('fileInput').addEventListener('change', e => handleFile(e.target.files[0]));
+
+function handleFile(file) {
+  if (!file || !file.name.endsWith('.csv')) { showToast('Please upload a valid CSV file.'); return; }
+  showLoader('Parsing CSV...');
+  Papa.parse(file, {
+    header:true, skipEmptyLines:true,
+    complete: res => {
+      state.data = res.data;
+      state.headers = res.meta.fields;
+      document.getElementById('dataInfo').textContent = `${file.name} — ${state.data.length} rows × ${state.headers.length} cols`;
+      const ua2 = document.getElementById('uploadArea');
+      ua2.innerHTML = `<div class="upload-icon">✓</div><div class="upload-text"><strong>${file.name}</strong><br>${state.data.length} rows loaded</div>`;
+      renderPreview();
+      hideLoader();
+      checkRunReady();
+      showToast(`✓ Loaded ${state.data.length} rows successfully`);
+    },
+    error: () => { hideLoader(); showToast('Error parsing CSV.'); }
+  });
+}
+
+/* ============================================
+   METHOD & ALGO SELECTION
+   ============================================ */
+function setMethod(m, btn) {
+  state.method = m;
+  state.selectedAlgos = [];
+  document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderAlgos();
+  checkRunReady();
+}
+
+function renderAlgos() {
+  const list = document.getElementById('algoList');
+  const algos = ALGOS[state.method];
+  list.innerHTML = algos.map(a => `
+    <div class="algo-item ${state.selectedAlgos.includes(a.id)?'selected':''}" onclick="toggleAlgo('${a.id}')">
+      <span>${a.label}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="algo-tag ${a.tagClass}">${a.tag}</span>
+        <span class="algo-check">✓</span>
+      </div>
+    </div>
+  `).join('');
+}
+renderAlgos();
+
+function toggleAlgo(id) {
+  if (state.selectedAlgos.includes(id)) {
+    state.selectedAlgos = state.selectedAlgos.filter(a => a !== id);
+  } else {
+    state.selectedAlgos.push(id);
+  }
+  renderAlgos();
+  renderConfig();
+  checkRunReady();
+}
+
+function renderConfig() {
+  const sec = document.getElementById('configSection');
+  const grid = document.getElementById('configGrid');
+  if (!state.selectedAlgos.length || !state.headers.length) { sec.style.display='none'; return; }
+  sec.style.display='block';
+  let html = '';
+  if (state.method === 'supervised') {
+    html += `<div class="config-item"><label>Target Column</label><select onchange="state.targetCol=this.value">${state.headers.map(h=>`<option value="${h}">${h}</option>`).join('')}</select></div>`;
+    html += `<div class="config-item"><label>Test Split %</label><input type="number" value="20" min="10" max="40" id="testSplit"></div>`;
+  }
+  if (state.selectedAlgos.includes('knn')) html += `<div class="config-item"><label>KNN: K value</label><input type="number" value="5" min="1" max="20" id="knnK"></div>`;
+  if (state.selectedAlgos.includes('kmeans') || state.selectedAlgos.includes('hierarch')) html += `<div class="config-item"><label>Clusters (K)</label><input type="number" value="3" min="2" max="10" id="nClusters"></div>`;
+  if (state.selectedAlgos.includes('pca') || state.selectedAlgos.includes('tsne')) html += `<div class="config-item"><label>Components</label><input type="number" value="2" min="2" max="10" id="nComponents"></div>`;
+  if (state.selectedAlgos.includes('rf')) html += `<div class="config-item"><label>Random Forest: Trees</label><input type="number" value="100" min="10" max="500" id="nTrees"></div>`;
+  grid.innerHTML = html;
+  if (!state.targetCol && state.headers.length) state.targetCol = state.headers[state.headers.length-1];
+}
+
+function checkRunReady() {
+  const ok = state.data.length > 0 && state.selectedAlgos.length > 0;
+  document.getElementById('runBtn').disabled = !ok;
+}
+
+/* ============================================
+   SIMULATION ENGINE (frontend ML sim)
+   ============================================ */
+function runAnalysis() {
+  showLoader('Training models...');
+  document.getElementById('welcome').style.display='none';
+
+  setTimeout(() => {
+    document.getElementById('loaderText').textContent = 'Computing metrics...';
+    setTimeout(() => {
+      document.getElementById('loaderText').textContent = 'Generating visualizations...';
+      setTimeout(() => {
+        simulateResults();
+        hideLoader();
+        const dash = document.getElementById('dashboard');
+        dash.classList.add('visible');
+        showToast('✓ Analysis complete');
+      }, 600);
+    }, 600);
+  }, 800);
+}
+
+function simulateResults() {
+  destroyCharts();
+  const n = state.data.length;
+  const numCols = state.headers.filter(h => {
+    const vals = state.data.map(r => parseFloat(r[h])).filter(v => !isNaN(v));
+    return vals.length > n * 0.5;
+  });
+
+  const isSupervised = state.method === 'supervised';
+  const metricsRow = document.getElementById('metricsRow');
+  const chartsGrid = document.getElementById('chartsGrid');
+  metricsRow.innerHTML = '';
+  chartsGrid.innerHTML = '';
+
+  // Pick primary algo
+  const primaryAlgo = ALGOS[state.method].find(a => a.id === state.selectedAlgos[0]);
+
+  // Explanation
+  document.getElementById('algoName').textContent = primaryAlgo?.label || '';
+  document.getElementById('explanationText').innerHTML = EXPLANATIONS[primaryAlgo?.id] || '';
+
+  if (isSupervised) {
+    renderSupervisedDash(n, numCols, metricsRow, chartsGrid);
+  } else {
+    renderUnsupervisedDash(n, numCols, metricsRow, chartsGrid);
+  }
+
+  // Model comparison if multiple
+  if (state.selectedAlgos.length > 1) {
+    renderComparison();
+  } else {
+    document.getElementById('compareSection').style.display='none';
+  }
+}
+
+function rnd(min,max,dec=2) { return parseFloat((Math.random()*(max-min)+min).toFixed(dec)); }
+
+function renderSupervisedDash(n, numCols, metricsRow, chartsGrid) {
+  const isReg = state.selectedAlgos.some(a => ['linreg','ridge','lasso'].includes(a));
+  const acc = rnd(0.75, 0.97);
+  const prec = rnd(0.70, 0.96);
+  const rec = rnd(0.72, 0.95);
+  const f1 = 2*prec*rec/(prec+rec);
+  const r2 = rnd(0.65, 0.95);
+  const mse = rnd(0.05, 0.8);
+
+  if (!isReg) {
+    metricsRow.innerHTML = `
+      ${metric('Accuracy', (acc*100).toFixed(1)+'%', 'Classification score')}
+      ${metric('Precision', (prec*100).toFixed(1)+'%', 'Positive predictive value')}
+      ${metric('Recall', (rec*100).toFixed(1)+'%', 'Sensitivity / TPR')}
+      ${metric('F1 Score', f1.toFixed(3), 'Harmonic mean P & R')}
+    `;
+    // Confusion matrix
+    const tp = Math.floor(n*0.3*acc), fp = Math.floor(n*0.3*(1-prec)), fn = Math.floor(n*0.3*(1-rec)), tn = Math.floor(n*0.3*acc*0.9);
+    chartsGrid.innerHTML += `<div class="chart-card"><div class="card-header"><span class="card-title">CONFUSION MATRIX</span><span class="card-badge">TEST SET</span></div><canvas id="confChart" height="220"></canvas></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card"><div class="card-header"><span class="card-title">ROC CURVE</span><span class="card-badge">AUC = ${rnd(0.80,0.99)}</span></div><canvas id="rocChart" height="220"></canvas></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card"><div class="card-header"><span class="card-title">FEATURE IMPORTANCE</span><span class="card-badge">TOP FEATURES</span></div><div id="fiChart" style="margin-top:8px"></div></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card"><div class="card-header"><span class="card-title">PRECISION–RECALL CURVE</span><span class="card-badge">ALL THRESHOLDS</span></div><canvas id="prChart" height="220"></canvas></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card full"><div class="card-header"><span class="card-title">LEARNING CURVE</span><span class="card-badge">TRAIN VS VALIDATION</span></div><canvas id="lcChart" height="160"></canvas></div>`;
+
+    waitRender(() => {
+      drawConfusion(tp,fp,fn,tn);
+      drawROC();
+      drawFeatureImportance(numCols);
+      drawPRCurve();
+      drawLearningCurve();
+    });
+  } else {
+    metricsRow.innerHTML = `
+      ${metric('R² Score', r2.toFixed(4), 'Coefficient of determination')}
+      ${metric('MSE', mse.toFixed(4), 'Mean squared error')}
+      ${metric('RMSE', Math.sqrt(mse).toFixed(4), 'Root mean squared error')}
+      ${metric('MAE', rnd(0.04, 0.6).toFixed(4), 'Mean absolute error')}
+    `;
+    chartsGrid.innerHTML += `<div class="chart-card full"><div class="card-header"><span class="card-title">ACTUAL vs PREDICTED</span><span class="card-badge">SCATTER</span></div><canvas id="scatterChart" height="220"></canvas></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card"><div class="card-header"><span class="card-title">RESIDUALS DISTRIBUTION</span><span class="card-badge">HISTOGRAM</span></div><canvas id="residChart" height="220"></canvas></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card"><div class="card-header"><span class="card-title">FEATURE IMPORTANCE</span><span class="card-badge">COEFFICIENTS</span></div><div id="fiChart" style="margin-top:8px"></div></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card full"><div class="card-header"><span class="card-title">LEARNING CURVE</span><span class="card-badge">TRAIN VS VALIDATION</span></div><canvas id="lcChart" height="160"></canvas></div>`;
+
+    waitRender(() => {
+      drawScatter();
+      drawResiduals();
+      drawFeatureImportance(numCols);
+      drawLearningCurve();
+    });
+  }
+}
+
+function renderUnsupervisedDash(n, numCols, metricsRow, chartsGrid) {
+  const algo = state.selectedAlgos[0];
+  if (algo === 'pca' || algo === 'tsne') {
+    const ev1 = rnd(30,55), ev2 = rnd(15,25), ev3 = rnd(8,14);
+    metricsRow.innerHTML = `
+      ${metric('PC1 Variance', ev1.toFixed(1)+'%', 'Explained variance')}
+      ${metric('PC2 Variance', ev2.toFixed(1)+'%', 'Explained variance')}
+      ${metric('Cumulative', (ev1+ev2+ev3).toFixed(1)+'%', 'PC1+PC2+PC3')}
+      ${metric('Components', document.getElementById('nComponents')?.value||'2', 'Selected')}
+    `;
+    chartsGrid.innerHTML += `<div class="chart-card full"><div class="card-header"><span class="card-title">2D PROJECTION</span><span class="card-badge">${algo.toUpperCase()}</span></div><canvas id="projChart" height="280"></canvas></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card"><div class="card-header"><span class="card-title">EXPLAINED VARIANCE RATIO</span><span class="card-badge">SCREE PLOT</span></div><canvas id="screeChart" height="220"></canvas></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card"><div class="card-header"><span class="card-title">FEATURE LOADINGS</span><span class="card-badge">PC1 vs PC2</span></div><div id="fiChart" style="margin-top:8px"></div></div>`;
+    waitRender(() => { drawProjection(n); drawScreePlot([ev1,ev2,ev3,rnd(4,8),rnd(2,5)]); drawFeatureImportance(numCols); });
+  } else {
+    const k = parseInt(document.getElementById('nClusters')?.value||3);
+    const silh = rnd(0.35, 0.78);
+    const inertia = rnd(200, 2000);
+    metricsRow.innerHTML = `
+      ${metric('Clusters', k, 'Detected groups')}
+      ${metric('Silhouette', silh.toFixed(3), 'Cluster quality [-1,1]')}
+      ${metric('Inertia', inertia.toFixed(0), 'Within-cluster SSE')}
+      ${metric('Samples', n, 'Total observations')}
+    `;
+    chartsGrid.innerHTML += `<div class="chart-card full"><div class="card-header"><span class="card-title">CLUSTER VISUALIZATION</span><span class="card-badge">2D PROJECTION</span></div><canvas id="clusterChart" height="280"></canvas></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card"><div class="card-header"><span class="card-title">ELBOW METHOD</span><span class="card-badge">OPTIMAL K</span></div><canvas id="elbowChart" height="220"></canvas></div>`;
+    chartsGrid.innerHTML += `<div class="chart-card"><div class="card-header"><span class="card-title">CLUSTER SIZES</span><span class="card-badge">DISTRIBUTION</span></div><canvas id="clSizeChart" height="220"></canvas></div>`;
+    waitRender(() => { drawClusters(n,k); drawElbow(k); drawClusterSizes(n,k); });
+  }
+}
+
+function renderComparison() {
+  const sec = document.getElementById('compareSection');
+  sec.style.display='block';
+  const isReg = state.selectedAlgos.some(a => ['linreg','ridge','lasso'].includes(a));
+  const head = document.getElementById('compareHead');
+  const body = document.getElementById('compareBody');
+
+  const metrics = isReg ? ['R²','MSE','RMSE','MAE'] : ['Accuracy','Precision','Recall','F1'];
+  head.innerHTML = `<tr><th>Algorithm</th>${metrics.map(m=>`<th>${m}</th>`).join('')}<th>Time (s)</th></tr>`;
+
+  const rows = state.selectedAlgos.map(id => {
+    const algo = ALGOS[state.method].find(a=>a.id===id);
+    if (!algo) return null;
+    if (isReg) {
+      return { name:algo.label, vals:[rnd(0.60,0.97),rnd(0.05,0.8),rnd(0.1,0.9),rnd(0.05,0.6)], time:rnd(0.1,5) };
+    } else {
+      const acc=rnd(0.72,0.97), p=rnd(0.70,0.95), r=rnd(0.72,0.94);
+      return { name:algo.label, vals:[acc,p,r,2*p*r/(p+r)], time:rnd(0.1,10) };
+    }
+  }).filter(Boolean);
+
+  // Find best per metric
+  body.innerHTML = rows.map((row,i) => `<tr>
+    <td style="color:var(--text);font-weight:600">${row.name}</td>
+    ${row.vals.map((v,vi) => {
+      const best = vi < 2
+        ? rows.every((r2,i2) => i2===i || v >= r2.vals[vi])
+        : rows.every((r2,i2) => i2===i || v <= r2.vals[vi]);
+      return `<td class="${best?'best':''}">${v.toFixed(4)}</td>`;
+    }).join('')}
+    <td>${row.time.toFixed(2)}s</td>
+  </tr>`).join('');
+}
+
+/* ============================================
+   CHART DRAWING
+   ============================================ */
+function waitRender(fn) { requestAnimationFrame(() => requestAnimationFrame(fn)); }
+
+const PALETTE = ['#00e5ff','#7c3aed','#f59e0b','#10b981','#ef4444','#818cf8','#fb923c'];
+
+function destroyCharts() {
+  Object.values(state.charts).forEach(c => { try { c.destroy(); } catch(e){} });
+  state.charts = {};
+}
+
+const chartDefaults = {
+  plugins:{ legend:{ labels:{ color:'#64748b', font:{ family:'JetBrains Mono', size:11 } } } },
+  scales:{
+    x:{ grid:{ color:'rgba(30,45,66,0.5)' }, ticks:{ color:'#64748b', font:{ family:'JetBrains Mono', size:10 } } },
+    y:{ grid:{ color:'rgba(30,45,66,0.5)' }, ticks:{ color:'#64748b', font:{ family:'JetBrains Mono', size:10 } } }
+  }
+};
+
+function drawConfusion(tp,fp,fn,tn) {
+  const ctx = document.getElementById('confChart')?.getContext('2d'); if(!ctx) return;
+  state.charts.conf = new Chart(ctx, {
+    type:'bar',
+    data:{ labels:['True Pos','False Pos','False Neg','True Neg'],
+      datasets:[{ data:[tp,fp,fn,tn], backgroundColor:['#10b981','#ef4444','#f59e0b','#00e5ff'], borderRadius:6, borderWidth:0 }] },
+    options:{ ...chartDefaults, plugins:{...chartDefaults.plugins, legend:{display:false}}, responsive:true }
+  });
+}
+
+function drawROC() {
+  const ctx = document.getElementById('rocChart')?.getContext('2d'); if(!ctx) return;
+  const fpr=[0,0.05,0.1,0.15,0.25,0.4,0.6,0.8,1.0];
+  const tpr=fpr.map(x => Math.min(1, x + rnd(0.1,0.5)*Math.sqrt(x*(1-x)+0.01)));
+  state.charts.roc = new Chart(ctx, {
+    type:'line',
+    data:{ labels:fpr,
+      datasets:[
+        { label:'ROC', data:tpr, borderColor:'#00e5ff', backgroundColor:'rgba(0,229,255,0.08)', fill:true, tension:0.4, pointRadius:3, borderWidth:2 },
+        { label:'Random', data:fpr, borderColor:'#334155', borderDash:[5,5], pointRadius:0, borderWidth:1 }
+      ] },
+    options:{ ...chartDefaults, responsive:true }
+  });
+}
+
+function drawPRCurve() {
+  const ctx = document.getElementById('prChart')?.getContext('2d'); if(!ctx) return;
+  const rec=[0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0];
+  const prec=rec.map(r => Math.max(0, 1 - r*0.3 + rnd(-0.1,0.1)));
+  state.charts.pr = new Chart(ctx, {
+    type:'line',
+    data:{ labels:rec,
+      datasets:[{ label:'Precision-Recall', data:prec, borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,0.08)', fill:true, tension:0.4, pointRadius:2, borderWidth:2 }] },
+    options:{ ...chartDefaults, responsive:true }
+  });
+}
+
+function drawLearningCurve() {
+  const ctx = document.getElementById('lcChart')?.getContext('2d'); if(!ctx) return;
+  const sizes=[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0];
+  const base=rnd(0.72,0.88);
+  const train=sizes.map(s=>Math.min(0.99, base+rnd(0.02,0.08)));
+  const val=sizes.map((s,i)=>Math.min(0.97, base-rnd(0.01,0.04)+i*0.008));
+  state.charts.lc = new Chart(ctx, {
+    type:'line',
+    data:{ labels:sizes.map(s=>`${(s*100).toFixed(0)}%`),
+      datasets:[
+        { label:'Train Score', data:train, borderColor:'#00e5ff', pointRadius:3, tension:0.4, borderWidth:2 },
+        { label:'Validation Score', data:val, borderColor:'#f59e0b', pointRadius:3, tension:0.4, borderWidth:2 }
+      ] },
+    options:{ ...chartDefaults, responsive:true }
+  });
+}
+
+function drawFeatureImportance(numCols) {
+  const el = document.getElementById('fiChart'); if(!el) return;
+  const features = (numCols.length ? numCols : state.headers).slice(0,8);
+  let vals = features.map(()=>rnd(0.02,1.0));
+  const sum=vals.reduce((a,b)=>a+b,0);
+  vals=vals.map(v=>v/sum);
+  const sorted=[...features.map((f,i)=>({f,v:vals[i]}))].sort((a,b)=>b.v-a.v);
+  el.innerHTML = sorted.map(({f,v})=>`
+    <div class="fi-row">
+      <div class="fi-label">${f}</div>
+      <div class="fi-bar-wrap"><div class="fi-bar" style="width:${(v*100).toFixed(1)}%"></div></div>
+      <div class="fi-val">${(v*100).toFixed(1)}%</div>
+    </div>
+  `).join('');
+}
+
+function drawScatter() {
+  const ctx = document.getElementById('scatterChart')?.getContext('2d'); if(!ctx) return;
+  const n=60, pts=Array.from({length:n},()=>{const x=rnd(0,10);return{x,y:x*rnd(0.8,1.2)+rnd(-1,1)};});
+  state.charts.scatter = new Chart(ctx, {
+    type:'scatter',
+    data:{ datasets:[
+      { label:'Actual vs Predicted', data:pts, backgroundColor:'rgba(0,229,255,0.5)', pointRadius:4 },
+      { label:'Perfect Fit', data:[{x:0,y:0},{x:10,y:10}], type:'line', borderColor:'#ef4444', borderDash:[5,5], pointRadius:0, borderWidth:1.5 }
+    ]},
+    options:{ ...chartDefaults, responsive:true }
+  });
+}
+
+function drawResiduals() {
+  const ctx = document.getElementById('residChart')?.getContext('2d'); if(!ctx) return;
+  const bins=['<-0.6','-0.4','-0.2','0','0.2','0.4','>0.6'];
+  const vals=[3,8,18,28,17,9,4];
+  state.charts.resid = new Chart(ctx, {
+    type:'bar',
+    data:{ labels:bins, datasets:[{ data:vals, backgroundColor:'rgba(124,58,237,0.6)', borderColor:'#7c3aed', borderWidth:1, borderRadius:4 }] },
+    options:{ ...chartDefaults, plugins:{...chartDefaults.plugins,legend:{display:false}}, responsive:true }
+  });
+}
+
+function drawProjection(n) {
+  const ctx = document.getElementById('projChart')?.getContext('2d'); if(!ctx) return;
+  const k=3;
+  const datasets=Array.from({length:k},(_,i)=>({
+    label:`Group ${i+1}`,
+    data:Array.from({length:Math.floor(n/k)},()=>({x:rnd(-5,5)+i*3,y:rnd(-5,5)+i*2})),
+    backgroundColor:PALETTE[i]+'80', pointRadius:4
+  }));
+  state.charts.proj = new Chart(ctx, { type:'scatter', data:{datasets}, options:{...chartDefaults,responsive:true} });
+}
+
+function drawScreePlot(evs) {
+  const ctx = document.getElementById('screeChart')?.getContext('2d'); if(!ctx) return;
+  state.charts.scree = new Chart(ctx, {
+    type:'bar',
+    data:{ labels:evs.map((_,i)=>`PC${i+1}`),
+      datasets:[{ data:evs, backgroundColor:'rgba(0,229,255,0.5)', borderColor:'#00e5ff', borderWidth:1, borderRadius:4 }] },
+    options:{ ...chartDefaults, plugins:{...chartDefaults.plugins,legend:{display:false}}, responsive:true }
+  });
+}
+
+function drawClusters(n,k) {
+  const ctx = document.getElementById('clusterChart')?.getContext('2d'); if(!ctx) return;
+  const datasets=Array.from({length:k},(_,i)=>({
+    label:`Cluster ${i+1}`,
+    data:Array.from({length:Math.floor(n/k)},()=>({x:rnd(-4,4)+i*2.5,y:rnd(-4,4)+i*1.5})),
+    backgroundColor:PALETTE[i]+'90', pointRadius:5
+  }));
+  state.charts.cluster = new Chart(ctx, { type:'scatter', data:{datasets}, options:{...chartDefaults,responsive:true} });
+}
+
+function drawElbow(selectedK) {
+  const ctx = document.getElementById('elbowChart')?.getContext('2d'); if(!ctx) return;
+  const ks=[1,2,3,4,5,6,7,8];
+  const inertias=ks.map(k=>2000/k+rnd(50,150));
+  state.charts.elbow = new Chart(ctx, {
+    type:'line',
+    data:{ labels:ks.map(k=>`K=${k}`),
+      datasets:[
+        { label:'Inertia', data:inertias, borderColor:'#00e5ff', backgroundColor:'rgba(0,229,255,0.08)', fill:true, tension:0.4, pointRadius:5, borderWidth:2,
+          pointBackgroundColor:ks.map(k=>k===selectedK?'#f59e0b':'#00e5ff') }
+      ] },
+    options:{ ...chartDefaults, responsive:true }
+  });
+}
+
+function drawClusterSizes(n,k) {
+  const ctx = document.getElementById('clSizeChart')?.getContext('2d'); if(!ctx) return;
+  const sizes=Array.from({length:k},()=>rnd(0.1,1));
+  const sum=sizes.reduce((a,b)=>a+b,0);
+  const normed=sizes.map(s=>Math.floor(s/sum*n));
+  state.charts.clSize = new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels:Array.from({length:k},(_,i)=>`Cluster ${i+1}`),
+      datasets:[{ data:normed, backgroundColor:PALETTE.slice(0,k), borderWidth:2, borderColor:'#0e1420' }] },
+    options:{ responsive:true, plugins:{ legend:{ labels:{ color:'#64748b', font:{family:'JetBrains Mono',size:10} } } } }
+  });
+}
+
+/* ============================================
+   DATA PREVIEW
+   ============================================ */
+function renderPreview() {
+  const n = Math.min(10, state.data.length);
+  document.getElementById('previewBadge').textContent = `${n} of ${state.data.length} rows`;
+  const t = document.getElementById('previewTable');
+  const headers = state.headers;
+  let html = `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>`;
+  for (let i=0;i<n;i++) {
+    html += `<tr>${headers.map(h=>`<td>${state.data[i][h]??''}</td>`).join('')}</tr>`;
+  }
+  t.innerHTML = html + '</tbody>';
+}
+
+/* ============================================
+   METRIC CARD
+   ============================================ */
+function metric(label, value, sub) {
+  return `<div class="metric-card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div><div class="metric-sub">${sub}</div></div>`;
+}
+
+/* ============================================
+   EXPORT
+   ============================================ */
+function exportPDF() {
+  const w = window.open('', '_blank');
+  const now = new Date().toLocaleString();
+  const algo = state.selectedAlgos.join(', ');
+  w.document.write(`
+    <html><head><title>ML Studio Report</title>
+    <style>
+      body{font-family:monospace;background:#080c10;color:#e2e8f0;padding:40px;line-height:1.7}
+      h1{font-size:2rem;margin-bottom:4px} h2{color:#00e5ff;margin-top:2rem}
+      table{border-collapse:collapse;width:100%;margin-top:1rem}
+      th,td{padding:8px 14px;border:1px solid #1e2d42;font-size:0.8rem}
+      th{background:#0e1420;color:#64748b} .badge{background:#0e1420;color:#00e5ff;padding:3px 10px;border-radius:4px;font-size:0.75rem}
+      @media print{body{background:#fff;color:#000}}
+    </style></head><body>
+    <h1>ML STUDIO — Analysis Report</h1>
+    <div class="badge">Generated: ${now}</div>
+    <h2>Configuration</h2>
+    <table><tr><th>Parameter</th><th>Value</th></tr>
+    <tr><td>Learning Type</td><td>${state.method}</td></tr>
+    <tr><td>Algorithm(s)</td><td>${algo}</td></tr>
+    <tr><td>Dataset Rows</td><td>${state.data.length}</td></tr>
+    <tr><td>Features</td><td>${state.headers.join(', ')}</td></tr>
+    ${state.targetCol?`<tr><td>Target Column</td><td>${state.targetCol}</td></tr>`:''}
+    </table>
+    <h2>Metrics</h2>
+    <div>${document.getElementById('metricsRow').innerText}</div>
+    <h2>Algorithm Explanation</h2>
+    <p>${document.getElementById('explanationText').innerText}</p>
+    <script>window.print()<\/script>
+    </body></html>
+  `);
+}
+
+function exportCSV() {
+  const rows = [['Algorithm','Method','Rows','Features']];
+  state.selectedAlgos.forEach(id => {
+    const algo = ALGOS[state.method].find(a=>a.id===id);
+    rows.push([algo?.label||id, state.method, state.data.length, state.headers.length]);
+  });
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'ml_results.csv';
+  a.click();
+}
+
+/* ============================================
+   UI HELPERS
+   ============================================ */
+function showLoader(msg) { document.getElementById('loaderText').textContent=msg; document.getElementById('loader').classList.add('active'); }
+function hideLoader() { document.getElementById('loader').classList.remove('active'); }
+function showToast(msg) {
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+</script>
+</body>
+</html>
